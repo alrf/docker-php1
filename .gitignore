@@ -1,0 +1,4 @@
+data/redis/*
+data/elk/*
+!data/elk/.gitkeep
+logs/*

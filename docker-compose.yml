@@ -1,0 +1,128 @@
+version: "3"
+
+services:
+
+  loadbalancer:
+    container_name: lb
+    image: httpd:2.4-alpine
+    restart: always
+    ports:
+      - "80:80"
+    networks:
+      - webapp
+    volumes:
+      - ./services/apache/httpd.conf:/usr/local/apache2/conf/httpd.conf
+      - ./services/apache/lb.conf:/usr/local/apache2/conf/extra/httpd-vhosts.conf
+
+  apache1:
+    container_name: apache1
+    image: httpd:2.4-alpine
+    restart: always
+    networks:
+      - webapp
+    volumes:
+      - ./services/apache/httpd.conf:/usr/local/apache2/conf/httpd.conf
+      - ./services/apache/backend.conf:/usr/local/apache2/conf/extra/httpd-vhosts.conf
+      - ./data/www:/var/www/html
+      - ./logs/apache1:/usr/local/apache2/logs
+    depends_on:
+      - php
+
+  apache2:
+    container_name: apache2
+    image: httpd:2.4-alpine
+    restart: always
+    networks:
+      - webapp
+    volumes:
+      - ./services/apache/httpd.conf:/usr/local/apache2/conf/httpd.conf
+      - ./services/apache/backend.conf:/usr/local/apache2/conf/extra/httpd-vhosts.conf
+      - ./data/www:/var/www/html
+      - ./logs/apache2:/usr/local/apache2/logs
+    depends_on:
+      - php
+
+  php:
+    container_name: php-fpm
+    build:
+      context: ./services/php-fpm
+    restart: always
+    networks:
+      - webapp
+    volumes:
+      - ./data/www:/var/www/html
+    depends_on:
+      - redis
+
+  redis:
+    container_name: redis
+    image: redis:alpine
+    restart: always
+    networks:
+      - webapp
+    volumes:
+      - ./data/redis:/data
+
+  elasticsearch:
+    container_name: elasticsearch
+    build:
+      context: ./services/elasticsearch
+    restart: always
+    privileged: true
+    volumes:
+      - ./services/elasticsearch/config/elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml:ro
+      - ./data/elk:/usr/share/elasticsearch/data
+    ports:
+      - "9200:9200"
+    environment:
+      ES_JAVA_OPTS: "-Xmx512m -Xms512m"
+    networks:
+      - webapp
+
+  logstash:
+    container_name: logstash
+    build:
+      context: ./services/logstash
+    restart: always
+    volumes:
+      - ./services/logstash/config/logstash.yml:/usr/share/logstash/config/logstash.yml:ro
+      - ./services/logstash/pipeline:/usr/share/logstash/pipeline:ro
+      - ./logs:/data
+    ports:
+      - "5044:5044"
+    environment:
+      LS_JAVA_OPTS: "-Xmx512m -Xms512m"
+    networks:
+      - webapp
+    depends_on:
+      - elasticsearch
+
+  kibana:
+    container_name: kibana
+    build:
+      context: ./services/kibana
+    restart: always
+    volumes:
+      - ./services/kibana/config/:/usr/share/kibana/config:ro
+    ports:
+      - "5601:5601"
+    networks:
+      - webapp
+    depends_on:
+      - elasticsearch
+
+  jenkins:
+    container_name: jenkins
+    build:
+      context: ./services/jenkins
+    restart: always
+    ports:
+      - "8080:8080"
+      - "50000:50000"
+    networks:
+      - webapp
+    depends_on:
+      - kibana
+
+networks:
+  webapp:
